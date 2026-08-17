@@ -1,21 +1,6 @@
 import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import {
-  Activity,
-  Backpack,
-  Brain,
-  Compass,
-  Dumbbell,
-  Layers,
-  LogOut,
-  MessageSquare,
-  Mic,
-  Radar,
-  Settings,
-  ShoppingBag,
-  Sparkles,
-  Wrench,
-} from "lucide-react";
+import { Activity, Compass, LogOut, MessageSquare, Mic, Radar, Sparkles, Wrench } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
@@ -29,15 +14,8 @@ const nav = [
   { to: "/briefing", label: "Briefing", icon: Sparkles },
   { to: "/trends", label: "Trends", icon: Radar },
   { to: "/research", label: "Research", icon: Compass },
-  { to: "/projects", label: "Projects", icon: Layers },
   { to: "/engineering", label: "Engineering", icon: Wrench },
   { to: "/habits", label: "Habits", icon: Activity },
-  { to: "/workouts", label: "Workouts", icon: Dumbbell },
-  { to: "/trips", label: "Trips", icon: Backpack },
-  { to: "/radar", label: "Product radar", icon: ShoppingBag },
-  { to: "/training", label: "Training", icon: Brain },
-  { to: "/flashcards", label: "Flashcards", icon: Layers },
-  { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
 function Shell() {

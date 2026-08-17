@@ -14,7 +14,9 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedBriefingRouteImport } from './routes/_authenticated/briefing'
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
+import { Route as AuthenticatedEngineeringRouteImport } from './routes/_authenticated/engineering'
 import { Route as AuthenticatedFaceRouteImport } from './routes/_authenticated/face'
+import { Route as AuthenticatedHabitsRouteImport } from './routes/_authenticated/habits'
 import { Route as AuthenticatedResearchRouteImport } from './routes/_authenticated/research'
 import { Route as AuthenticatedTrendsRouteImport } from './routes/_authenticated/trends'
 
@@ -42,9 +44,20 @@ const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedEngineeringRoute =
+  AuthenticatedEngineeringRouteImport.update({
+    id: '/engineering',
+    path: '/engineering',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedFaceRoute = AuthenticatedFaceRouteImport.update({
   id: '/face',
   path: '/face',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedHabitsRoute = AuthenticatedHabitsRouteImport.update({
+  id: '/habits',
+  path: '/habits',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedResearchRoute = AuthenticatedResearchRouteImport.update({
@@ -63,7 +76,9 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/briefing': typeof AuthenticatedBriefingRoute
   '/chat': typeof AuthenticatedChatRoute
+  '/engineering': typeof AuthenticatedEngineeringRoute
   '/face': typeof AuthenticatedFaceRoute
+  '/habits': typeof AuthenticatedHabitsRoute
   '/research': typeof AuthenticatedResearchRoute
   '/trends': typeof AuthenticatedTrendsRoute
 }
@@ -72,7 +87,9 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/briefing': typeof AuthenticatedBriefingRoute
   '/chat': typeof AuthenticatedChatRoute
+  '/engineering': typeof AuthenticatedEngineeringRoute
   '/face': typeof AuthenticatedFaceRoute
+  '/habits': typeof AuthenticatedHabitsRoute
   '/research': typeof AuthenticatedResearchRoute
   '/trends': typeof AuthenticatedTrendsRoute
 }
@@ -83,16 +100,35 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/briefing': typeof AuthenticatedBriefingRoute
   '/_authenticated/chat': typeof AuthenticatedChatRoute
+  '/_authenticated/engineering': typeof AuthenticatedEngineeringRoute
   '/_authenticated/face': typeof AuthenticatedFaceRoute
+  '/_authenticated/habits': typeof AuthenticatedHabitsRoute
   '/_authenticated/research': typeof AuthenticatedResearchRoute
   '/_authenticated/trends': typeof AuthenticatedTrendsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/auth' | '/briefing' | '/chat' | '/face' | '/research' | '/trends'
+    | '/'
+    | '/auth'
+    | '/briefing'
+    | '/chat'
+    | '/engineering'
+    | '/face'
+    | '/habits'
+    | '/research'
+    | '/trends'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/briefing' | '/chat' | '/face' | '/research' | '/trends'
+  to:
+    | '/'
+    | '/auth'
+    | '/briefing'
+    | '/chat'
+    | '/engineering'
+    | '/face'
+    | '/habits'
+    | '/research'
+    | '/trends'
   id:
     | '__root__'
     | '/'
@@ -100,7 +136,9 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/briefing'
     | '/_authenticated/chat'
+    | '/_authenticated/engineering'
     | '/_authenticated/face'
+    | '/_authenticated/habits'
     | '/_authenticated/research'
     | '/_authenticated/trends'
   fileRoutesById: FileRoutesById
@@ -148,11 +186,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChatRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/engineering': {
+      id: '/_authenticated/engineering'
+      path: '/engineering'
+      fullPath: '/engineering'
+      preLoaderRoute: typeof AuthenticatedEngineeringRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/face': {
       id: '/_authenticated/face'
       path: '/face'
       fullPath: '/face'
       preLoaderRoute: typeof AuthenticatedFaceRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/habits': {
+      id: '/_authenticated/habits'
+      path: '/habits'
+      fullPath: '/habits'
+      preLoaderRoute: typeof AuthenticatedHabitsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/research': {
@@ -175,7 +227,9 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBriefingRoute: typeof AuthenticatedBriefingRoute
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
+  AuthenticatedEngineeringRoute: typeof AuthenticatedEngineeringRoute
   AuthenticatedFaceRoute: typeof AuthenticatedFaceRoute
+  AuthenticatedHabitsRoute: typeof AuthenticatedHabitsRoute
   AuthenticatedResearchRoute: typeof AuthenticatedResearchRoute
   AuthenticatedTrendsRoute: typeof AuthenticatedTrendsRoute
 }
@@ -183,7 +237,9 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBriefingRoute: AuthenticatedBriefingRoute,
   AuthenticatedChatRoute: AuthenticatedChatRoute,
+  AuthenticatedEngineeringRoute: AuthenticatedEngineeringRoute,
   AuthenticatedFaceRoute: AuthenticatedFaceRoute,
+  AuthenticatedHabitsRoute: AuthenticatedHabitsRoute,
   AuthenticatedResearchRoute: AuthenticatedResearchRoute,
   AuthenticatedTrendsRoute: AuthenticatedTrendsRoute,
 }
