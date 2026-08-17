@@ -185,3 +185,32 @@
   text-transform: uppercase;
   color: var(--muted-foreground);
 }
+
+@keyframes jarvis-sweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes jarvis-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.09);
+    opacity: 1;
+  }
+}
+
+@utility radar-sweep {
+  animation: jarvis-sweep 3.4s linear infinite;
+}
+
+@utility core-pulse {
+  animation: jarvis-pulse 2.2s ease-in-out infinite;
+}
