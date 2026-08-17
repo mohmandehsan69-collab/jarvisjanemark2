@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      briefings: {
+        Row: {
+          created_at: string
+          day: string
+          id: string
+          trends_blurb: string
+          user_id: string
+          weather: Json
+        }
+        Insert: {
+          created_at?: string
+          day?: string
+          id?: string
+          trends_blurb?: string
+          user_id: string
+          weather?: Json
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          id?: string
+          trends_blurb?: string
+          user_id?: string
+          weather?: Json
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           content: string
@@ -172,6 +199,39 @@ export type Database = {
         }
         Relationships: []
       }
+      product_radar: {
+        Row: {
+          created_at: string
+          direction: string
+          id: string
+          notes: string
+          product: string
+          target_price: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          direction?: string
+          id?: string
+          notes?: string
+          product: string
+          target_price?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          id?: string
+          notes?: string
+          product?: string
+          target_price?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -192,6 +252,41 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      project_tasks: {
+        Row: {
+          created_at: string
+          done: boolean
+          id: string
+          project_id: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          done?: boolean
+          id?: string
+          project_id: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          done?: boolean
+          id?: string
+          project_id?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       projects: {
         Row: {
@@ -327,6 +422,80 @@ export type Database = {
         }
         Relationships: []
       }
+      trip_items: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          packed: boolean
+          trip_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          packed?: boolean
+          trip_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          packed?: boolean
+          trip_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_items_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trips: {
+        Row: {
+          created_at: string
+          end_date: string
+          id: string
+          latitude: number | null
+          location: string
+          longitude: number | null
+          name: string
+          start_date: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_date?: string
+          id?: string
+          latitude?: number | null
+          location?: string
+          longitude?: number | null
+          name: string
+          start_date?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          id?: string
+          latitude?: number | null
+          location?: string
+          longitude?: number | null
+          name?: string
+          start_date?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_settings: {
         Row: {
           ai_provider: string
@@ -357,6 +526,77 @@ export type Database = {
           updated_at?: string
           user_id?: string
           voice_enabled?: boolean
+        }
+        Relationships: []
+      }
+      workout_logs: {
+        Row: {
+          created_at: string
+          exercise: string
+          hold_seconds: number
+          id: string
+          reps: number
+          sets: number
+          user_id: string
+          workout_id: string
+        }
+        Insert: {
+          created_at?: string
+          exercise: string
+          hold_seconds?: number
+          id?: string
+          reps?: number
+          sets?: number
+          user_id: string
+          workout_id: string
+        }
+        Update: {
+          created_at?: string
+          exercise?: string
+          hold_seconds?: number
+          id?: string
+          reps?: number
+          sets?: number
+          user_id?: string
+          workout_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_logs_workout_id_fkey"
+            columns: ["workout_id"]
+            isOneToOne: false
+            referencedRelation: "workouts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workouts: {
+        Row: {
+          created_at: string
+          day_index: number
+          day_name: string
+          id: string
+          notes: string
+          performed_on: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_index?: number
+          day_name: string
+          id?: string
+          notes?: string
+          performed_on?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          day_index?: number
+          day_name?: string
+          id?: string
+          notes?: string
+          performed_on?: string
+          user_id?: string
         }
         Relationships: []
       }
