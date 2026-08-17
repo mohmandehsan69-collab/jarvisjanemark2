@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedBriefingRouteImport } from './routes/_authenticated/briefing'
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
 import { Route as AuthenticatedFaceRouteImport } from './routes/_authenticated/face'
+import { Route as AuthenticatedResearchRouteImport } from './routes/_authenticated/research'
 import { Route as AuthenticatedTrendsRouteImport } from './routes/_authenticated/trends'
 
 const IndexRoute = IndexRouteImport.update({
@@ -46,6 +47,11 @@ const AuthenticatedFaceRoute = AuthenticatedFaceRouteImport.update({
   path: '/face',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedResearchRoute = AuthenticatedResearchRouteImport.update({
+  id: '/research',
+  path: '/research',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedTrendsRoute = AuthenticatedTrendsRouteImport.update({
   id: '/trends',
   path: '/trends',
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/briefing': typeof AuthenticatedBriefingRoute
   '/chat': typeof AuthenticatedChatRoute
   '/face': typeof AuthenticatedFaceRoute
+  '/research': typeof AuthenticatedResearchRoute
   '/trends': typeof AuthenticatedTrendsRoute
 }
 export interface FileRoutesByTo {
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/briefing': typeof AuthenticatedBriefingRoute
   '/chat': typeof AuthenticatedChatRoute
   '/face': typeof AuthenticatedFaceRoute
+  '/research': typeof AuthenticatedResearchRoute
   '/trends': typeof AuthenticatedTrendsRoute
 }
 export interface FileRoutesById {
@@ -76,13 +84,15 @@ export interface FileRoutesById {
   '/_authenticated/briefing': typeof AuthenticatedBriefingRoute
   '/_authenticated/chat': typeof AuthenticatedChatRoute
   '/_authenticated/face': typeof AuthenticatedFaceRoute
+  '/_authenticated/research': typeof AuthenticatedResearchRoute
   '/_authenticated/trends': typeof AuthenticatedTrendsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/briefing' | '/chat' | '/face' | '/trends'
+  fullPaths:
+    '/' | '/auth' | '/briefing' | '/chat' | '/face' | '/research' | '/trends'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/briefing' | '/chat' | '/face' | '/trends'
+  to: '/' | '/auth' | '/briefing' | '/chat' | '/face' | '/research' | '/trends'
   id:
     | '__root__'
     | '/'
@@ -91,6 +101,7 @@ export interface FileRouteTypes {
     | '/_authenticated/briefing'
     | '/_authenticated/chat'
     | '/_authenticated/face'
+    | '/_authenticated/research'
     | '/_authenticated/trends'
   fileRoutesById: FileRoutesById
 }
@@ -144,6 +155,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFaceRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/research': {
+      id: '/_authenticated/research'
+      path: '/research'
+      fullPath: '/research'
+      preLoaderRoute: typeof AuthenticatedResearchRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/trends': {
       id: '/_authenticated/trends'
       path: '/trends'
@@ -158,6 +176,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBriefingRoute: typeof AuthenticatedBriefingRoute
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
   AuthenticatedFaceRoute: typeof AuthenticatedFaceRoute
+  AuthenticatedResearchRoute: typeof AuthenticatedResearchRoute
   AuthenticatedTrendsRoute: typeof AuthenticatedTrendsRoute
 }
 
@@ -165,6 +184,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBriefingRoute: AuthenticatedBriefingRoute,
   AuthenticatedChatRoute: AuthenticatedChatRoute,
   AuthenticatedFaceRoute: AuthenticatedFaceRoute,
+  AuthenticatedResearchRoute: AuthenticatedResearchRoute,
   AuthenticatedTrendsRoute: AuthenticatedTrendsRoute,
 }
 
