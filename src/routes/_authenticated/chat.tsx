@@ -78,8 +78,11 @@ function ChatPage() {
 
   async function forget(id: string) {
     const { error } = await supabase.from("memory_notes").delete().eq("id", id);
-    if (error) return toast.error(error.message);
-    qc.invalidateQueries({ queryKey: ["memory_notes"] });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    void qc.invalidateQueries({ queryKey: ["memory_notes"] });
   }
 
   return (
