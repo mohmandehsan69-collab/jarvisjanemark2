@@ -257,6 +257,112 @@ export async function gradeDrill(
   return { score, feedback };
 }
 
+export async function runBriefing(supabase: Db, userId: string) {
+  const preferAnthropic = await loadPreferAnthropic(supabase, userId);
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: existing } = await supabase
+    .from("briefings")
+    .select("id,day,trends_blurb,weather,created_at")
+    .eq("user_id", userId)
+    .eq("day", today)
+    .maybeSingle();
+  if (existing) return { row: existing, cached: true as const, provider: null };
+
+  const memory = await loadMemoryBlock(supabase, userId);
+  const { data: settings } = await supabase
+    .from("user_settings")
+    .select("latitude,longitude")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  let weather: Record<string, unknown> = {};
+  if (settings?.latitude != null && settings?.longitude != null) {
+    try {
+      const res = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${settings.latitude}&longitude=${settings.longitude}&current=temperature_2m,precipitation,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1`,
+      );
+      if (!res.ok) throw new Error(`weather API returned HTTP ${res.status}`);
+      const data = (await res.json()) as any;
+      weather = {
+        now_c: data?.current?.temperature_2m ?? null,
+        wind_kmh: data?.current?.wind_speed_10m ?? null,
+        high_c: data?.daily?.temperature_2m_max?.[0] ?? null,
+        low_c: data?.daily?.temperature_2m_min?.[0] ?? null,
+        rain_chance: data?.daily?.precipitation_probability_max?.[0] ?? null,
+      };
+    } catch (error) {
+      weather = { error: error instanceof Error ? error.message : String(error) };
+    }
+  } else {
+    weather = { error: "No location saved yet — set one in Settings for weather in the briefing." };
+  }
+
+  const { data: habits } = await supabase
+    .from("habits")
+    .select("name")
+    .eq("user_id", userId)
+    .eq("archived", false);
+  const { data: tasks } = await supabase
+    .from("project_tasks")
+    .select("title")
+    .eq("user_id", userId)
+    .eq("done", false)
+    .limit(8);
+
+  const result = await callAI({
+    preferAnthropic,
+    system: `${VOICE} Write a morning briefing: 5-8 short lines, no headings, no fluff. Reference weather only if real numbers are supplied.`,
+    messages: [
+      {
+        role: "user",
+        content: `Date: ${today}\nWeather data: ${JSON.stringify(weather)}\nActive habits: ${(habits ?? []).map((h: any) => h.name).join(", ") || "none"}\nOpen tasks: ${(tasks ?? []).map((t: any) => t.title).join("; ") || "none"}\nKnown facts:\n${memory}\n\nWrite today's briefing.`,
+      },
+    ],
+  });
+
+  const { data, error } = await supabase
+    .from("briefings")
+    .upsert(
+      { user_id: userId, day: today, trends_blurb: result.text, weather },
+      { onConflict: "user_id,day" },
+    )
+    .select("id,day,trends_blurb,weather,created_at")
+    .single();
+  if (error) throw new Error(`Briefing generated but could not be saved: ${error.message}`);
+  return { row: data, cached: false as const, provider: result.provider };
+}
+
+export async function suggestPacking(supabase: Db, userId: string, tripId: string) {
+  const preferAnthropic = await loadPreferAnthropic(supabase, userId);
+  const { data: trip, error: loadError } = await supabase
+    .from("trips")
+    .select("id,name,location,start_date,end_date")
+    .eq("id", tripId)
+    .eq("user_id", userId)
+    .single();
+  if (loadError || !trip) throw new Error("That trip could not be found for this account.");
+  const result = await callAI({
+    preferAnthropic,
+    json: true,
+    system: `${VOICE} You plan camping trips. Packing lists must be practical and weather-appropriate, with safety items included.`,
+    messages: [
+      {
+        role: "user",
+        content: `Camping trip "${trip.name}" at ${trip.location || "an unspecified location"}, ${trip.start_date} to ${trip.end_date}. Return ONLY a JSON array of 16-22 short packing item strings.`,
+      },
+    ],
+  });
+  const parsed = extractJson<string[]>(result.text);
+  if (!parsed?.length) throw new Error(`No usable packing list returned: ${result.text.slice(0, 200)}`);
+  const rows = parsed
+    .filter((label) => typeof label === "string" && label.trim())
+    .slice(0, 24)
+    .map((label) => ({ user_id: userId, trip_id: tripId, label: label.trim().slice(0, 120) }));
+  const { error } = await supabase.from("trip_items").insert(rows);
+  if (error) throw new Error(`List generated but could not be saved: ${error.message}`);
+  return { created: rows.length };
+}
+
 export async function generateFlashcards(
   supabase: Db,
   userId: string,
