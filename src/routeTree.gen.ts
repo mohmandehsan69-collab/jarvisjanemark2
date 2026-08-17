@@ -10,33 +10,143 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedBriefingRouteImport } from './routes/_authenticated/briefing'
+import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
+import { Route as AuthenticatedEngineeringRouteImport } from './routes/_authenticated/engineering'
+import { Route as AuthenticatedFaceRouteImport } from './routes/_authenticated/face'
+import { Route as AuthenticatedHabitsRouteImport } from './routes/_authenticated/habits'
+import { Route as AuthenticatedResearchRouteImport } from './routes/_authenticated/research'
+import { Route as AuthenticatedTrendsRouteImport } from './routes/_authenticated/trends'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedBriefingRoute = AuthenticatedBriefingRouteImport.update({
+  id: '/briefing',
+  path: '/briefing',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedEngineeringRoute =
+  AuthenticatedEngineeringRouteImport.update({
+    id: '/engineering',
+    path: '/engineering',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedFaceRoute = AuthenticatedFaceRouteImport.update({
+  id: '/face',
+  path: '/face',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedHabitsRoute = AuthenticatedHabitsRouteImport.update({
+  id: '/habits',
+  path: '/habits',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedResearchRoute = AuthenticatedResearchRouteImport.update({
+  id: '/research',
+  path: '/research',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTrendsRoute = AuthenticatedTrendsRouteImport.update({
+  id: '/trends',
+  path: '/trends',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/briefing': typeof AuthenticatedBriefingRoute
+  '/chat': typeof AuthenticatedChatRoute
+  '/engineering': typeof AuthenticatedEngineeringRoute
+  '/face': typeof AuthenticatedFaceRoute
+  '/habits': typeof AuthenticatedHabitsRoute
+  '/research': typeof AuthenticatedResearchRoute
+  '/trends': typeof AuthenticatedTrendsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/briefing': typeof AuthenticatedBriefingRoute
+  '/chat': typeof AuthenticatedChatRoute
+  '/engineering': typeof AuthenticatedEngineeringRoute
+  '/face': typeof AuthenticatedFaceRoute
+  '/habits': typeof AuthenticatedHabitsRoute
+  '/research': typeof AuthenticatedResearchRoute
+  '/trends': typeof AuthenticatedTrendsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/_authenticated/briefing': typeof AuthenticatedBriefingRoute
+  '/_authenticated/chat': typeof AuthenticatedChatRoute
+  '/_authenticated/engineering': typeof AuthenticatedEngineeringRoute
+  '/_authenticated/face': typeof AuthenticatedFaceRoute
+  '/_authenticated/habits': typeof AuthenticatedHabitsRoute
+  '/_authenticated/research': typeof AuthenticatedResearchRoute
+  '/_authenticated/trends': typeof AuthenticatedTrendsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/briefing'
+    | '/chat'
+    | '/engineering'
+    | '/face'
+    | '/habits'
+    | '/research'
+    | '/trends'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/briefing'
+    | '/chat'
+    | '/engineering'
+    | '/face'
+    | '/habits'
+    | '/research'
+    | '/trends'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/briefing'
+    | '/_authenticated/chat'
+    | '/_authenticated/engineering'
+    | '/_authenticated/face'
+    | '/_authenticated/habits'
+    | '/_authenticated/research'
+    | '/_authenticated/trends'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +158,99 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/briefing': {
+      id: '/_authenticated/briefing'
+      path: '/briefing'
+      fullPath: '/briefing'
+      preLoaderRoute: typeof AuthenticatedBriefingRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/chat': {
+      id: '/_authenticated/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof AuthenticatedChatRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/engineering': {
+      id: '/_authenticated/engineering'
+      path: '/engineering'
+      fullPath: '/engineering'
+      preLoaderRoute: typeof AuthenticatedEngineeringRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/face': {
+      id: '/_authenticated/face'
+      path: '/face'
+      fullPath: '/face'
+      preLoaderRoute: typeof AuthenticatedFaceRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/habits': {
+      id: '/_authenticated/habits'
+      path: '/habits'
+      fullPath: '/habits'
+      preLoaderRoute: typeof AuthenticatedHabitsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/research': {
+      id: '/_authenticated/research'
+      path: '/research'
+      fullPath: '/research'
+      preLoaderRoute: typeof AuthenticatedResearchRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/trends': {
+      id: '/_authenticated/trends'
+      path: '/trends'
+      fullPath: '/trends'
+      preLoaderRoute: typeof AuthenticatedTrendsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedBriefingRoute: typeof AuthenticatedBriefingRoute
+  AuthenticatedChatRoute: typeof AuthenticatedChatRoute
+  AuthenticatedEngineeringRoute: typeof AuthenticatedEngineeringRoute
+  AuthenticatedFaceRoute: typeof AuthenticatedFaceRoute
+  AuthenticatedHabitsRoute: typeof AuthenticatedHabitsRoute
+  AuthenticatedResearchRoute: typeof AuthenticatedResearchRoute
+  AuthenticatedTrendsRoute: typeof AuthenticatedTrendsRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedBriefingRoute: AuthenticatedBriefingRoute,
+  AuthenticatedChatRoute: AuthenticatedChatRoute,
+  AuthenticatedEngineeringRoute: AuthenticatedEngineeringRoute,
+  AuthenticatedFaceRoute: AuthenticatedFaceRoute,
+  AuthenticatedHabitsRoute: AuthenticatedHabitsRoute,
+  AuthenticatedResearchRoute: AuthenticatedResearchRoute,
+  AuthenticatedTrendsRoute: AuthenticatedTrendsRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
