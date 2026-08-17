@@ -47,10 +47,15 @@ export async function runChat(supabase: Db, userId: string, message: string) {
     .order("created_at", { ascending: false })
     .limit(20);
 
-  const messages: AiMessage[] = [...(history ?? [])]
-    .reverse()
-    .map((m: any) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content }))
-    .concat([{ role: "user", content: message }]);
+  const messages: AiMessage[] = [
+    ...[...(history ?? [])].reverse().map(
+      (m: any): AiMessage => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: String(m.content),
+      }),
+    ),
+    { role: "user", content: message },
+  ];
 
   const system = `${VOICE}
 
