@@ -13,6 +13,8 @@ export type AiRequest = {
   /** Ask the provider for raw JSON output. */
   json?: boolean;
   preferAnthropic?: boolean;
+  /** Voice/face path: optimise for latency over exhaustiveness. */
+  voice?: boolean;
 };
 
 export type AiResult = {
@@ -34,6 +36,10 @@ const GEMINI_DIRECT_MODELS = [
 ];
 const LOVABLE_MODELS = ["google/gemini-3.6-flash", "google/gemini-2.5-flash"];
 const ANTHROPIC_MODEL = "claude-sonnet-4-6";
+
+const VOICE_SYSTEM_SUFFIX =
+  "\n\nThis is a spoken voice conversation. Answer in 2-3 short spoken sentences unless the user explicitly asks for detail. No markdown, no lists.";
+const VOICE_MAX_TOKENS = 400;
 
 function env(name: string): string | undefined {
   const value = process.env[name];
@@ -72,13 +78,14 @@ async function fetchWithRetry(
   url: string,
   init: RequestInit,
   attempts = 3,
+  maxDelayMs = 8000,
 ): Promise<Response> {
   let res = await fetch(url, init);
   for (let i = 1; i < attempts && isTransient(res.status); i++) {
     const retryAfter = Number(res.headers.get("retry-after"));
     const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
-      ? Math.min(retryAfter * 1000, 8000)
-      : 400 * 2 ** (i - 1) + Math.random() * 250;
+      ? Math.min(retryAfter * 1000, maxDelayMs)
+      : Math.min(400 * 2 ** (i - 1) + Math.random() * 250, maxDelayMs);
     await sleep(waitMs);
     res = await fetch(url, init);
   }
@@ -143,12 +150,17 @@ export async function callAI(req: AiRequest): Promise<AiResult> {
 
   // Ordered chain: chosen provider first, then any other configured provider.
   const chain: ProviderId[] = [provider];
+  if (req.voice) {
+    // Latency path: one fast failover target only.
+    if (provider !== "lovable" && env("LOVABLE_API_KEY")) chain.push("lovable");
+  } else {
   for (const fallback of ["lovable", "gemini", "anthropic"] as ProviderId[]) {
     if (chain.includes(fallback)) continue;
     if (fallback === "gemini" && !geminiKey()) continue;
     if (fallback === "lovable" && !env("LOVABLE_API_KEY")) continue;
     if (fallback === "anthropic" && !env("ANTHROPIC_API_KEY")) continue;
     chain.push(fallback);
+  }
   }
 
   const failures: string[] = [];
@@ -172,12 +184,15 @@ export async function callAI(req: AiRequest): Promise<AiResult> {
 async function callGemini(req: AiRequest): Promise<AiResult> {
   const key = geminiKey()!;
   const body: Record<string, unknown> = {
-    systemInstruction: { parts: [{ text: req.system }] },
+    systemInstruction: { parts: [{ text: req.voice ? req.system + VOICE_SYSTEM_SUFFIX : req.system }] },
     contents: req.messages.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     })),
-    generationConfig: { temperature: 0.6, maxOutputTokens: 2048 },
+    generationConfig: {
+      temperature: 0.6,
+      maxOutputTokens: req.voice ? VOICE_MAX_TOKENS : 2048,
+    },
   };
   // Grounding and JSON mime type are mutually exclusive on Gemini.
   if (req.search) body["tools"] = [{ google_search: {} }];
@@ -191,7 +206,9 @@ async function callGemini(req: AiRequest): Promise<AiResult> {
   let data: any;
   let usedModel = "";
   const rejected: string[] = [];
-  for (const model of GEMINI_DIRECT_MODELS) {
+  // Voice: single model, one quick retry, then fail over immediately.
+  const models = req.voice ? GEMINI_DIRECT_MODELS.slice(0, 1) : GEMINI_DIRECT_MODELS;
+  for (const model of models) {
     const res = await fetchWithRetry(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
@@ -199,6 +216,8 @@ async function callGemini(req: AiRequest): Promise<AiResult> {
         headers: { "content-type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify(body),
       },
+      req.voice ? 2 : 3,
+      req.voice ? 400 : 8000,
     );
     if (res.ok) {
       usedModel = model;
@@ -238,22 +257,33 @@ async function callGemini(req: AiRequest): Promise<AiResult> {
 
 async function callLovable(req: AiRequest): Promise<AiResult> {
   const key = env("LOVABLE_API_KEY")!;
+  const system = req.voice ? req.system + VOICE_SYSTEM_SUFFIX : req.system;
   const messages = [
     {
       role: "system",
       content: req.search
-        ? `${req.system}\n\nYou have no live browsing here: state clearly when a claim may be stale, and cite well-known primary sources by URL where possible.`
-        : req.system,
+        ? `${system}\n\nYou have no live browsing here: state clearly when a claim may be stale, and cite well-known primary sources by URL where possible.`
+        : system,
     },
     ...req.messages,
   ];
   const rejected: string[] = [];
-  for (const model of LOVABLE_MODELS) {
-    const res = await fetchWithRetry("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "content-type": "application/json", "Lovable-API-Key": key },
-      body: JSON.stringify({ model, messages, temperature: req.json ? 0.3 : 0.6 }),
-    });
+  for (const model of req.voice ? LOVABLE_MODELS.slice(0, 1) : LOVABLE_MODELS) {
+    const res = await fetchWithRetry(
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "Lovable-API-Key": key },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: req.json ? 0.3 : 0.6,
+          ...(req.voice ? { max_tokens: VOICE_MAX_TOKENS } : {}),
+        }),
+      },
+      req.voice ? 2 : 3,
+      req.voice ? 400 : 8000,
+    );
     if (!res.ok) {
       const detail = await readError(res);
       if (isModelRejection(res.status, detail) || isTransient(res.status)) {
@@ -283,8 +313,8 @@ async function callAnthropic(req: AiRequest): Promise<AiResult> {
     },
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
-      max_tokens: 2048,
-      system: req.system,
+      max_tokens: req.voice ? VOICE_MAX_TOKENS : 2048,
+      system: req.voice ? req.system + VOICE_SYSTEM_SUFFIX : req.system,
       messages: req.messages,
       ...(req.search
         ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }] }

@@ -13,7 +13,7 @@ function getRecognition(): any | null {
   return Ctor ? new Ctor() : null;
 }
 
-export function useVoiceMode({ onUtterance, silenceMs = 1400 }: Options) {
+export function useVoiceMode({ onUtterance, silenceMs = 650 }: Options) {
   const [active, setActive] = useState(false);
   const [phase, setPhase] = useState<VoicePhase>("idle");
   const [transcript, setTranscript] = useState("");
@@ -26,6 +26,7 @@ export function useVoiceMode({ onUtterance, silenceMs = 1400 }: Options) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeRef = useRef(false);
   const busyRef = useRef(false);
+  const warmedRef = useRef(false);
 
   useEffect(() => {
     setSupported(Boolean(getRecognition()) && typeof window !== "undefined" && "speechSynthesis" in window);
@@ -35,6 +36,21 @@ export function useVoiceMode({ onUtterance, silenceMs = 1400 }: Options) {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
   };
+
+  /** Pay the speechSynthesis init cost up front, not on the first real reply. */
+  const warmUpSpeech = useCallback(() => {
+    if (warmedRef.current) return;
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    warmedRef.current = true;
+    try {
+      window.speechSynthesis.getVoices();
+      const warm = new SpeechSynthesisUtterance(" ");
+      warm.volume = 0;
+      window.speechSynthesis.speak(warm);
+    } catch {
+      /* noop */
+    }
+  }, []);
 
   const speak = useCallback((text: string) => {
     return new Promise<void>((resolve) => {
@@ -53,6 +69,18 @@ export function useVoiceMode({ onUtterance, silenceMs = 1400 }: Options) {
       window.speechSynthesis.speak(utter);
     });
   }, []);
+
+  /** Speak the first sentence as soon as possible, then queue the remainder. */
+  const speakIncremental = useCallback(
+    async (text: string) => {
+      const sentences = text.match(/[^.!?\n]+[.!?]*\s*/g)?.map((s) => s.trim()).filter(Boolean) ?? [];
+      if (!sentences.length) return speak(text);
+      await speak(sentences[0]!);
+      const rest = sentences.slice(1).join(" ").trim();
+      if (rest) await speak(rest);
+    },
+    [speak],
+  );
 
   const startListening = useCallback(() => {
     const rec = recRef.current;
@@ -85,7 +113,7 @@ export function useVoiceMode({ onUtterance, silenceMs = 1400 }: Options) {
       const answer = await onUtterance(text);
       setReply(answer);
       setPhase("speaking");
-      await speak(answer);
+      await speakIncremental(answer);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
@@ -96,7 +124,7 @@ export function useVoiceMode({ onUtterance, silenceMs = 1400 }: Options) {
       if (activeRef.current) startListening();
       else setPhase("idle");
     }
-  }, [onUtterance, speak, startListening]);
+  }, [onUtterance, speak, speakIncremental, startListening]);
 
   const stop = useCallback(() => {
     activeRef.current = false;
@@ -113,6 +141,7 @@ export function useVoiceMode({ onUtterance, silenceMs = 1400 }: Options) {
 
   const start = useCallback(() => {
     setError(null);
+    warmUpSpeech();
     const rec = getRecognition();
     if (!rec) {
       setSupported(false);
@@ -144,7 +173,7 @@ export function useVoiceMode({ onUtterance, silenceMs = 1400 }: Options) {
     activeRef.current = true;
     setActive(true);
     startListening();
-  }, [flush, silenceMs, startListening]);
+  }, [flush, silenceMs, startListening, warmUpSpeech]);
 
   useEffect(() => () => stop(), [stop]);
 

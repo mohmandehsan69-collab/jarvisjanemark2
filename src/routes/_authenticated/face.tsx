@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Mic, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Page } from "@/components/app/Page";
+import { AmbientFace } from "@/components/AmbientFace";
 import { useVoiceMode } from "@/hooks/useVoiceMode";
 import { jarvisChat } from "@/lib/jarvis.functions";
 
@@ -37,7 +38,7 @@ function FacePage() {
   const qc = useQueryClient();
   const voice = useVoiceMode({
     onUtterance: async (text) => {
-      const result = await chat({ data: { message: text } });
+      const result = await chat({ data: { message: text, voice: true } });
       void qc.invalidateQueries({ queryKey: ["chat_messages"] });
       void qc.invalidateQueries({ queryKey: ["memory_notes"] });
       return result.reply;
@@ -51,19 +52,15 @@ function FacePage() {
           type="button"
           onClick={() => (voice.active ? voice.stop() : voice.start())}
           aria-label={voice.active ? "Exit ambient mode" : "Enter ambient mode"}
-          className="relative flex size-64 items-center justify-center rounded-full border border-primary/30 bg-primary/5 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-80"
+          className="relative flex size-64 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-80"
         >
-          <span className="absolute inset-4 rounded-full border border-primary/20" />
-          <span className="absolute inset-12 rounded-full border border-primary/15" />
-          {voice.active ? (
-            <span className="radar-sweep absolute inset-2 rounded-full bg-[conic-gradient(from_0deg,transparent_0deg,var(--primary)_28deg,transparent_60deg)] opacity-40" />
-          ) : null}
-          <span
-            className={`relative flex size-24 items-center justify-center rounded-full bg-primary/25 text-primary ${
-              voice.phase === "listening" || voice.phase === "speaking" ? "core-pulse" : ""
-            }`}
-          >
-            {voice.active ? <Square className="size-7" /> : <Mic className="size-8" />}
+          <AmbientFace
+            phase={voice.phase}
+            active={voice.active}
+            className="absolute inset-0 size-full"
+          />
+          <span className="relative flex size-16 items-center justify-center rounded-full bg-[#ff6b1a]/20 text-[#ffc766] backdrop-blur-sm">
+            {voice.active ? <Square className="size-6" /> : <Mic className="size-7" />}
           </span>
         </button>
 
