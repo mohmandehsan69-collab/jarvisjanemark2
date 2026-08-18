@@ -60,6 +60,31 @@ function isModelRejection(status: number, body: string): boolean {
   );
 }
 
+/** Transient upstream conditions: worth retrying, then worth failing over. */
+function isTransient(status: number): boolean {
+  return status === 429 || status === 503 || status === 500 || status === 502 || status === 504;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** POST with bounded retry + jitter on transient statuses. */
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  attempts = 3,
+): Promise<Response> {
+  let res = await fetch(url, init);
+  for (let i = 1; i < attempts && isTransient(res.status); i++) {
+    const retryAfter = Number(res.headers.get("retry-after"));
+    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+      ? Math.min(retryAfter * 1000, 8000)
+      : 400 * 2 ** (i - 1) + Math.random() * 250;
+    await sleep(waitMs);
+    res = await fetch(url, init);
+  }
+  return res;
+}
+
 export function providerStatus(preferAnthropic: boolean) {
   const gemini = Boolean(geminiKey());
   const lovable = Boolean(env("LOVABLE_API_KEY"));
@@ -112,14 +137,36 @@ export async function callAI(req: AiRequest): Promise<AiResult> {
       'Settings is set to "my own Anthropic key" but no ANTHROPIC_API_KEY secret exists. Add the secret (name must match exactly) or switch back to the default provider.',
     );
   }
-  try {
-    if (provider === "gemini") return await callGemini(req);
-    if (provider === "anthropic") return await callAnthropic(req);
-    return await callLovable(req);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`AI request failed via ${provider}: ${detail}`);
+
+  const run = (p: ProviderId) =>
+    p === "gemini" ? callGemini(req) : p === "anthropic" ? callAnthropic(req) : callLovable(req);
+
+  // Ordered chain: chosen provider first, then any other configured provider.
+  const chain: ProviderId[] = [provider];
+  for (const fallback of ["lovable", "gemini", "anthropic"] as ProviderId[]) {
+    if (chain.includes(fallback)) continue;
+    if (fallback === "gemini" && !geminiKey()) continue;
+    if (fallback === "lovable" && !env("LOVABLE_API_KEY")) continue;
+    if (fallback === "anthropic" && !env("ANTHROPIC_API_KEY")) continue;
+    chain.push(fallback);
   }
+
+  const failures: string[] = [];
+  for (const p of chain) {
+    try {
+      return await run(p);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      failures.push(`${p}: ${detail}`);
+      // Only fail over when the provider itself is unavailable/overloaded.
+      if (!/HTTP (429|5\d\d)|overload|high demand|unavailable|no usable/i.test(detail)) {
+        throw new Error(`AI request failed via ${p}: ${detail}`);
+      }
+    }
+  }
+  throw new Error(
+    `Every configured AI provider is currently unavailable. Details — ${failures.join(" | ")}`,
+  );
 }
 
 async function callGemini(req: AiRequest): Promise<AiResult> {
@@ -145,7 +192,7 @@ async function callGemini(req: AiRequest): Promise<AiResult> {
   let usedModel = "";
   const rejected: string[] = [];
   for (const model of GEMINI_DIRECT_MODELS) {
-    const res = await fetch(
+    const res = await fetchWithRetry(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
         method: "POST",
@@ -159,8 +206,9 @@ async function callGemini(req: AiRequest): Promise<AiResult> {
       break;
     }
     const detail = await readError(res);
-    // Only walk to the next candidate when the model id itself was refused.
-    if (isModelRejection(res.status, detail)) {
+    // Walk to the next candidate when the id was refused, or when this model is
+    // still overloaded after retries — a sibling model usually has capacity.
+    if (isModelRejection(res.status, detail) || isTransient(res.status)) {
       rejected.push(model);
       continue;
     }
@@ -168,7 +216,7 @@ async function callGemini(req: AiRequest): Promise<AiResult> {
   }
   if (!usedModel) {
     throw new Error(
-      `no usable Gemini flash model. Rejected: ${rejected.join(", ")}. Google may have renamed the model IDs — update GEMINI_DIRECT_MODELS in src/lib/ai.server.ts.`,
+      `no usable Gemini flash model right now (tried: ${rejected.join(", ")}) — the model was either renamed or overloaded (HTTP 503).`,
     );
   }
   const candidate = data?.candidates?.[0];
@@ -201,14 +249,14 @@ async function callLovable(req: AiRequest): Promise<AiResult> {
   ];
   const rejected: string[] = [];
   for (const model of LOVABLE_MODELS) {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetchWithRetry("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { "content-type": "application/json", "Lovable-API-Key": key },
       body: JSON.stringify({ model, messages, temperature: req.json ? 0.3 : 0.6 }),
     });
     if (!res.ok) {
       const detail = await readError(res);
-      if (isModelRejection(res.status, detail)) {
+      if (isModelRejection(res.status, detail) || isTransient(res.status)) {
         rejected.push(model);
         continue;
       }
@@ -220,13 +268,13 @@ async function callLovable(req: AiRequest): Promise<AiResult> {
     return { text, provider: "lovable", model, sources: [] };
   }
   throw new Error(
-    `no usable gateway model. Rejected: ${rejected.join(", ")}. Update LOVABLE_MODELS in src/lib/ai.server.ts.`,
+    `no usable gateway model right now (tried: ${rejected.join(", ")}).`,
   );
 }
 
 async function callAnthropic(req: AiRequest): Promise<AiResult> {
   const key = env("ANTHROPIC_API_KEY")!;
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "content-type": "application/json",
