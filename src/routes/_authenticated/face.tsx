@@ -5,7 +5,8 @@ import { Mic, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Page } from "@/components/app/Page";
 import { AmbientFace } from "@/components/AmbientFace";
-import { useVoiceMode } from "@/hooks/useVoiceMode";
+import { useState } from "react";
+import { useVoiceMode, VOICE_LANGS, type VoiceLangKey } from "@/hooks/useVoiceMode";
 import { jarvisChat } from "@/lib/jarvis.functions";
 
 const title = "Ambient face mode — hands-free Jarvis";
@@ -36,9 +37,20 @@ const phaseCopy = {
 function FacePage() {
   const chat = useServerFn(jarvisChat);
   const qc = useQueryClient();
+  const [lang, setLang] = useState<VoiceLangKey>("en");
   const voice = useVoiceMode({
+    lang,
     onUtterance: async (text) => {
-      const result = await chat({ data: { message: text, voice: true } });
+      const result = await chat({
+        data: {
+          message: text,
+          voice: true,
+          // Dari/Farsi replies must come back in Persian script to be spoken.
+          ...(lang === "fa"
+            ? { language: "Dari (Afghan Farsi). Reply only in Persian script." }
+            : {}),
+        },
+      });
       void qc.invalidateQueries({ queryKey: ["chat_messages"] });
       void qc.invalidateQueries({ queryKey: ["memory_notes"] });
       return result.reply;
@@ -49,7 +61,14 @@ function FacePage() {
   if (voice.active) {
     return (
       <div className="fixed inset-0 z-50 overflow-hidden bg-[#07070a]">
-        <AmbientFace phase={voice.phase} active={voice.active} className="absolute inset-0 size-full" />
+        <button
+          type="button"
+          onClick={() => voice.interrupt()}
+          aria-label="Interrupt"
+          className="absolute inset-0 size-full cursor-default"
+        >
+          <AmbientFace phase={voice.phase} active={voice.active} className="absolute inset-0 size-full" />
+        </button>
 
         <button
           type="button"
@@ -59,6 +78,21 @@ function FacePage() {
         >
           <Square className="size-3.5" /> Exit
         </button>
+
+        <div className="absolute left-5 top-5 z-10 flex gap-1 rounded-full border border-[#ff6b1a]/30 bg-black/40 p-1 backdrop-blur-sm">
+          {(Object.keys(VOICE_LANGS) as VoiceLangKey[]).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setLang(key)}
+              className={`rounded-full px-3 py-1 text-xs transition ${
+                lang === key ? "bg-[#ff6b1a]/30 text-[#ffc766]" : "text-white/50 hover:text-white/80"
+              }`}
+            >
+              {VOICE_LANGS[key].label}
+            </button>
+          ))}
+        </div>
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-3 bg-gradient-to-t from-black/80 to-transparent px-6 pb-10 pt-20 text-center">
           <p className="text-xs tracking-[0.3em] text-[#ffc766] uppercase">
@@ -95,6 +129,20 @@ function FacePage() {
             <Mic className="size-7" />
           </span>
         </button>
+
+        <div className="flex gap-2">
+          {(Object.keys(VOICE_LANGS) as VoiceLangKey[]).map((key) => (
+            <Button
+              key={key}
+              type="button"
+              variant={lang === key ? "default" : "outline"}
+              size="sm"
+              onClick={() => setLang(key)}
+            >
+              {VOICE_LANGS[key].label}
+            </Button>
+          ))}
+        </div>
 
         <div className="text-center">
           <p className="label-mono">{phaseCopy[voice.phase]}</p>
