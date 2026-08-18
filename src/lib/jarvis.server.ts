@@ -37,7 +37,13 @@ async function loadMemoryBlock(supabase: Db, userId: string) {
   return lines.join("\n");
 }
 
-export async function runChat(supabase: Db, userId: string, message: string, voice = false) {
+export async function runChat(
+  supabase: Db,
+  userId: string,
+  message: string,
+  voice = false,
+  language?: string,
+) {
   const preferAnthropic = await loadPreferAnthropic(supabase, userId);
   const memory = await loadMemoryBlock(supabase, userId);
   const { data: history } = await supabase
@@ -57,7 +63,11 @@ export async function runChat(supabase: Db, userId: string, message: string, voi
     { role: "user", content: message },
   ];
 
-  const system = `${VOICE}
+  const languageRule = language
+    ? `\n\nLANGUAGE: Reply entirely in ${language}. Use natural, grammatical everyday phrasing a native speaker would use, not literal translation from English. Keep the same script throughout.`
+    : "";
+
+  const system = `${VOICE}${languageRule}
 
 Known facts about the user (long-term memory):
 ${memory}
