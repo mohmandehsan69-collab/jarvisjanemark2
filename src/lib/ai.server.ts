@@ -22,11 +22,17 @@ export type AiResult = {
   sources: { title: string; url: string }[];
 };
 
-// Verified model IDs. `gemini-3.7-flash` is NOT a valid ID on Google's direct
-// generativelanguage API — it only exists behind the Lovable AI gateway as
-// `google/gemini-3.7-flash`, so each transport gets the ID it actually accepts.
-const GEMINI_DIRECT_MODEL = "gemini-2.5-flash";
-const LOVABLE_MODEL = "google/gemini-3.7-flash";
+// Model IDs drift: a hardcoded id is the single most common cause of a hard
+// failure here (e.g. "gemini-2.5-flash is not found for API version v1beta").
+// So each transport gets an ordered candidate list, newest first, and we fall
+// through to the next id on a 404/400 "model not found" style rejection.
+const GEMINI_DIRECT_MODELS = [
+  "gemini-flash-latest",
+  "gemini-3.7-flash",
+  "gemini-3-flash",
+  "gemini-2.5-flash",
+];
+const LOVABLE_MODELS = ["google/gemini-3.6-flash", "google/gemini-2.5-flash"];
 const ANTHROPIC_MODEL = "claude-sonnet-4-6";
 
 function env(name: string): string | undefined {
@@ -34,8 +40,28 @@ function env(name: string): string | undefined {
   return value && value.trim() ? value.trim() : undefined;
 }
 
+/** The spec demands GEMINI_API_KEY, but a past build stored it misspelled.
+ *  Accept both so a typo can never silently disable the default provider. */
+function geminiKey(): string | undefined {
+  return env("GEMINI_API_KEY") ?? env("GEMIN_API_KEY");
+}
+
+/** True when the provider rejected the model id itself rather than the request. */
+function isModelRejection(status: number, body: string): boolean {
+  if (status !== 404 && status !== 400) return false;
+  const b = body.toLowerCase();
+  return (
+    b.includes("not found") ||
+    b.includes("not supported") ||
+    b.includes("unsupported model") ||
+    b.includes("invalid model") ||
+    b.includes("does not exist") ||
+    b.includes("deprecated")
+  );
+}
+
 export function providerStatus(preferAnthropic: boolean) {
-  const gemini = Boolean(env("GEMINI_API_KEY"));
+  const gemini = Boolean(geminiKey());
   const lovable = Boolean(env("LOVABLE_API_KEY"));
   const anthropic = Boolean(env("ANTHROPIC_API_KEY"));
   return {
@@ -48,7 +74,7 @@ export function providerStatus(preferAnthropic: boolean) {
 
 function resolveProvider(preferAnthropic: boolean): ProviderId | null {
   if (preferAnthropic && env("ANTHROPIC_API_KEY")) return "anthropic";
-  if (env("GEMINI_API_KEY")) return "gemini";
+  if (geminiKey()) return "gemini";
   if (env("LOVABLE_API_KEY")) return "lovable";
   if (env("ANTHROPIC_API_KEY")) return "anthropic";
   return null;
@@ -97,7 +123,7 @@ export async function callAI(req: AiRequest): Promise<AiResult> {
 }
 
 async function callGemini(req: AiRequest): Promise<AiResult> {
-  const key = env("GEMINI_API_KEY")!;
+  const key = geminiKey()!;
   const body: Record<string, unknown> = {
     systemInstruction: { parts: [{ text: req.system }] },
     contents: req.messages.map((m) => ({
@@ -115,16 +141,36 @@ async function callGemini(req: AiRequest): Promise<AiResult> {
       responseMimeType: "application/json",
     };
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_DIRECT_MODEL}:generateContent`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify(body),
-    },
-  );
-  if (!res.ok) throw new Error(await readError(res));
-  const data = (await res.json()) as any;
+  let data: any;
+  let usedModel = "";
+  const rejected: string[] = [];
+  for (const model of GEMINI_DIRECT_MODELS) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify(body),
+      },
+    );
+    if (res.ok) {
+      usedModel = model;
+      data = await res.json();
+      break;
+    }
+    const detail = await readError(res);
+    // Only walk to the next candidate when the model id itself was refused.
+    if (isModelRejection(res.status, detail)) {
+      rejected.push(model);
+      continue;
+    }
+    throw new Error(`${detail} (model: ${model})`);
+  }
+  if (!usedModel) {
+    throw new Error(
+      `no usable Gemini flash model. Rejected: ${rejected.join(", ")}. Google may have renamed the model IDs — update GEMINI_DIRECT_MODELS in src/lib/ai.server.ts.`,
+    );
+  }
   const candidate = data?.candidates?.[0];
   const text: string = (candidate?.content?.parts ?? [])
     .map((p: any) => p?.text ?? "")
@@ -139,33 +185,43 @@ async function callGemini(req: AiRequest): Promise<AiResult> {
   const sources = chunks
     .map((c: any) => ({ title: c?.web?.title ?? "source", url: c?.web?.uri ?? "" }))
     .filter((s: { url: string }) => s.url);
-  return { text, provider: "gemini", model: GEMINI_DIRECT_MODEL, sources };
+  return { text, provider: "gemini", model: usedModel, sources };
 }
 
 async function callLovable(req: AiRequest): Promise<AiResult> {
   const key = env("LOVABLE_API_KEY")!;
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: LOVABLE_MODEL,
-      messages: [
-        {
-          role: "system",
-          content: req.search
-            ? `${req.system}\n\nYou have no live browsing here: state clearly when a claim may be stale, and cite well-known primary sources by URL where possible.`
-            : req.system,
-        },
-        ...req.messages,
-      ],
-      temperature: req.json ? 0.3 : 0.6,
-    }),
-  });
-  if (!res.ok) throw new Error(await readError(res));
-  const data = (await res.json()) as any;
-  const text: string = data?.choices?.[0]?.message?.content?.trim?.() ?? "";
-  if (!text) throw new Error(`empty response: ${JSON.stringify(data).slice(0, 300)}`);
-  return { text, provider: "lovable", model: LOVABLE_MODEL, sources: [] };
+  const messages = [
+    {
+      role: "system",
+      content: req.search
+        ? `${req.system}\n\nYou have no live browsing here: state clearly when a claim may be stale, and cite well-known primary sources by URL where possible.`
+        : req.system,
+    },
+    ...req.messages,
+  ];
+  const rejected: string[] = [];
+  for (const model of LOVABLE_MODELS) {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json", "Lovable-API-Key": key },
+      body: JSON.stringify({ model, messages, temperature: req.json ? 0.3 : 0.6 }),
+    });
+    if (!res.ok) {
+      const detail = await readError(res);
+      if (isModelRejection(res.status, detail)) {
+        rejected.push(model);
+        continue;
+      }
+      throw new Error(`${detail} (model: ${model})`);
+    }
+    const data = (await res.json()) as any;
+    const text: string = data?.choices?.[0]?.message?.content?.trim?.() ?? "";
+    if (!text) throw new Error(`empty response: ${JSON.stringify(data).slice(0, 300)}`);
+    return { text, provider: "lovable", model, sources: [] };
+  }
+  throw new Error(
+    `no usable gateway model. Rejected: ${rejected.join(", ")}. Update LOVABLE_MODELS in src/lib/ai.server.ts.`,
+  );
 }
 
 async function callAnthropic(req: AiRequest): Promise<AiResult> {
