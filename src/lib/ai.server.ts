@@ -313,8 +313,8 @@ async function callAnthropic(req: AiRequest): Promise<AiResult> {
     },
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
-      max_tokens: 2048,
-      system: req.system,
+      max_tokens: req.voice ? VOICE_MAX_TOKENS : 2048,
+      system: req.voice ? req.system + VOICE_SYSTEM_SUFFIX : req.system,
       messages: req.messages,
       ...(req.search
         ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }] }
