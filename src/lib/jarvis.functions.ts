@@ -21,10 +21,22 @@ export const aiStatus = createServerFn({ method: "GET" })
 export const jarvisChat = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z.object({ message: z.string().min(1).max(6000), voice: z.boolean().optional() }).parse(d),
+    z
+      .object({
+        message: z.string().min(1).max(6000),
+        voice: z.boolean().optional(),
+        language: z.string().max(120).optional(),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) =>
-    runChat(context.supabase as any, context.userId, data.message, data.voice ?? false),
+    runChat(
+      context.supabase as any,
+      context.userId,
+      data.message,
+      data.voice ?? false,
+      data.language,
+    ),
   );
 
 export const scanTrends = createServerFn({ method: "POST" })
