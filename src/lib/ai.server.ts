@@ -22,11 +22,17 @@ export type AiResult = {
   sources: { title: string; url: string }[];
 };
 
-// Verified model IDs. `gemini-3.7-flash` is NOT a valid ID on Google's direct
-// generativelanguage API — it only exists behind the Lovable AI gateway as
-// `google/gemini-3.7-flash`, so each transport gets the ID it actually accepts.
-const GEMINI_DIRECT_MODEL = "gemini-2.5-flash";
-const LOVABLE_MODEL = "google/gemini-3.7-flash";
+// Model IDs drift: a hardcoded id is the single most common cause of a hard
+// failure here (e.g. "gemini-2.5-flash is not found for API version v1beta").
+// So each transport gets an ordered candidate list, newest first, and we fall
+// through to the next id on a 404/400 "model not found" style rejection.
+const GEMINI_DIRECT_MODELS = [
+  "gemini-flash-latest",
+  "gemini-3.7-flash",
+  "gemini-3-flash",
+  "gemini-2.5-flash",
+];
+const LOVABLE_MODELS = ["google/gemini-3.6-flash", "google/gemini-2.5-flash"];
 const ANTHROPIC_MODEL = "claude-sonnet-4-6";
 
 function env(name: string): string | undefined {
@@ -34,8 +40,28 @@ function env(name: string): string | undefined {
   return value && value.trim() ? value.trim() : undefined;
 }
 
+/** The spec demands GEMINI_API_KEY, but a past build stored it misspelled.
+ *  Accept both so a typo can never silently disable the default provider. */
+function geminiKey(): string | undefined {
+  return env("GEMINI_API_KEY") ?? env("GEMIN_API_KEY");
+}
+
+/** True when the provider rejected the model id itself rather than the request. */
+function isModelRejection(status: number, body: string): boolean {
+  if (status !== 404 && status !== 400) return false;
+  const b = body.toLowerCase();
+  return (
+    b.includes("not found") ||
+    b.includes("not supported") ||
+    b.includes("unsupported model") ||
+    b.includes("invalid model") ||
+    b.includes("does not exist") ||
+    b.includes("deprecated")
+  );
+}
+
 export function providerStatus(preferAnthropic: boolean) {
-  const gemini = Boolean(env("GEMINI_API_KEY"));
+  const gemini = Boolean(geminiKey());
   const lovable = Boolean(env("LOVABLE_API_KEY"));
   const anthropic = Boolean(env("ANTHROPIC_API_KEY"));
   return {
@@ -48,7 +74,7 @@ export function providerStatus(preferAnthropic: boolean) {
 
 function resolveProvider(preferAnthropic: boolean): ProviderId | null {
   if (preferAnthropic && env("ANTHROPIC_API_KEY")) return "anthropic";
-  if (env("GEMINI_API_KEY")) return "gemini";
+  if (geminiKey()) return "gemini";
   if (env("LOVABLE_API_KEY")) return "lovable";
   if (env("ANTHROPIC_API_KEY")) return "anthropic";
   return null;
