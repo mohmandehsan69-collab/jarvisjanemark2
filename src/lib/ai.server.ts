@@ -191,6 +191,9 @@ async function callGemini(req: AiRequest): Promise<AiResult> {
     generationConfig: {
       temperature: 0.6,
       maxOutputTokens: req.voice ? VOICE_MAX_TOKENS : 2048,
+      // Gemini 3.x Flash reasons before answering by default, which can add many
+      // seconds of latency. Voice needs speed far more than deliberation.
+      ...(req.voice ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
     },
   };
   // Grounding and JSON mime type are mutually exclusive on Gemini.
