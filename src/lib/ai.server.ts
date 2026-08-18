@@ -257,22 +257,33 @@ async function callGemini(req: AiRequest): Promise<AiResult> {
 
 async function callLovable(req: AiRequest): Promise<AiResult> {
   const key = env("LOVABLE_API_KEY")!;
+  const system = req.voice ? req.system + VOICE_SYSTEM_SUFFIX : req.system;
   const messages = [
     {
       role: "system",
       content: req.search
-        ? `${req.system}\n\nYou have no live browsing here: state clearly when a claim may be stale, and cite well-known primary sources by URL where possible.`
-        : req.system,
+        ? `${system}\n\nYou have no live browsing here: state clearly when a claim may be stale, and cite well-known primary sources by URL where possible.`
+        : system,
     },
     ...req.messages,
   ];
   const rejected: string[] = [];
-  for (const model of LOVABLE_MODELS) {
-    const res = await fetchWithRetry("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "content-type": "application/json", "Lovable-API-Key": key },
-      body: JSON.stringify({ model, messages, temperature: req.json ? 0.3 : 0.6 }),
-    });
+  for (const model of req.voice ? LOVABLE_MODELS.slice(0, 1) : LOVABLE_MODELS) {
+    const res = await fetchWithRetry(
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "Lovable-API-Key": key },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: req.json ? 0.3 : 0.6,
+          ...(req.voice ? { max_tokens: VOICE_MAX_TOKENS } : {}),
+        }),
+      },
+      req.voice ? 2 : 3,
+      req.voice ? 400 : 8000,
+    );
     if (!res.ok) {
       const detail = await readError(res);
       if (isModelRejection(res.status, detail) || isTransient(res.status)) {
