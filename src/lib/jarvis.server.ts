@@ -37,7 +37,7 @@ async function loadMemoryBlock(supabase: Db, userId: string) {
   return lines.join("\n");
 }
 
-export async function runChat(supabase: Db, userId: string, message: string) {
+export async function runChat(supabase: Db, userId: string, message: string, voice = false) {
   const preferAnthropic = await loadPreferAnthropic(supabase, userId);
   const memory = await loadMemoryBlock(supabase, userId);
   const { data: history } = await supabase
@@ -67,7 +67,7 @@ If this message reveals a durable new fact worth remembering (a routine, prefere
 MEMORY: {"key":"short_snake_case_key","value":"the fact in one short sentence"}
 Emit at most one MEMORY line, and only when the fact is genuinely durable.`;
 
-  const result = await callAI({ system, messages, preferAnthropic });
+  const result = await callAI({ system, messages, preferAnthropic, voice });
 
   let reply = result.text;
   const match = reply.match(/^MEMORY:\s*(\{[\s\S]*\})\s*$/m);
