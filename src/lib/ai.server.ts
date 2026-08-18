@@ -123,7 +123,7 @@ export async function callAI(req: AiRequest): Promise<AiResult> {
 }
 
 async function callGemini(req: AiRequest): Promise<AiResult> {
-  const key = env("GEMINI_API_KEY")!;
+  const key = geminiKey()!;
   const body: Record<string, unknown> = {
     systemInstruction: { parts: [{ text: req.system }] },
     contents: req.messages.map((m) => ({
@@ -141,16 +141,36 @@ async function callGemini(req: AiRequest): Promise<AiResult> {
       responseMimeType: "application/json",
     };
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_DIRECT_MODEL}:generateContent`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify(body),
-    },
-  );
-  if (!res.ok) throw new Error(await readError(res));
-  const data = (await res.json()) as any;
+  let data: any;
+  let usedModel = "";
+  const rejected: string[] = [];
+  for (const model of GEMINI_DIRECT_MODELS) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify(body),
+      },
+    );
+    if (res.ok) {
+      usedModel = model;
+      data = await res.json();
+      break;
+    }
+    const detail = await readError(res);
+    // Only walk to the next candidate when the model id itself was refused.
+    if (isModelRejection(res.status, detail)) {
+      rejected.push(model);
+      continue;
+    }
+    throw new Error(`${detail} (model: ${model})`);
+  }
+  if (!usedModel) {
+    throw new Error(
+      `no usable Gemini flash model. Rejected: ${rejected.join(", ")}. Google may have renamed the model IDs — update GEMINI_DIRECT_MODELS in src/lib/ai.server.ts.`,
+    );
+  }
   const candidate = data?.candidates?.[0];
   const text: string = (candidate?.content?.parts ?? [])
     .map((p: any) => p?.text ?? "")
@@ -165,33 +185,43 @@ async function callGemini(req: AiRequest): Promise<AiResult> {
   const sources = chunks
     .map((c: any) => ({ title: c?.web?.title ?? "source", url: c?.web?.uri ?? "" }))
     .filter((s: { url: string }) => s.url);
-  return { text, provider: "gemini", model: GEMINI_DIRECT_MODEL, sources };
+  return { text, provider: "gemini", model: usedModel, sources };
 }
 
 async function callLovable(req: AiRequest): Promise<AiResult> {
   const key = env("LOVABLE_API_KEY")!;
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: LOVABLE_MODEL,
-      messages: [
-        {
-          role: "system",
-          content: req.search
-            ? `${req.system}\n\nYou have no live browsing here: state clearly when a claim may be stale, and cite well-known primary sources by URL where possible.`
-            : req.system,
-        },
-        ...req.messages,
-      ],
-      temperature: req.json ? 0.3 : 0.6,
-    }),
-  });
-  if (!res.ok) throw new Error(await readError(res));
-  const data = (await res.json()) as any;
-  const text: string = data?.choices?.[0]?.message?.content?.trim?.() ?? "";
-  if (!text) throw new Error(`empty response: ${JSON.stringify(data).slice(0, 300)}`);
-  return { text, provider: "lovable", model: LOVABLE_MODEL, sources: [] };
+  const messages = [
+    {
+      role: "system",
+      content: req.search
+        ? `${req.system}\n\nYou have no live browsing here: state clearly when a claim may be stale, and cite well-known primary sources by URL where possible.`
+        : req.system,
+    },
+    ...req.messages,
+  ];
+  const rejected: string[] = [];
+  for (const model of LOVABLE_MODELS) {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json", "Lovable-API-Key": key },
+      body: JSON.stringify({ model, messages, temperature: req.json ? 0.3 : 0.6 }),
+    });
+    if (!res.ok) {
+      const detail = await readError(res);
+      if (isModelRejection(res.status, detail)) {
+        rejected.push(model);
+        continue;
+      }
+      throw new Error(`${detail} (model: ${model})`);
+    }
+    const data = (await res.json()) as any;
+    const text: string = data?.choices?.[0]?.message?.content?.trim?.() ?? "";
+    if (!text) throw new Error(`empty response: ${JSON.stringify(data).slice(0, 300)}`);
+    return { text, provider: "lovable", model, sources: [] };
+  }
+  throw new Error(
+    `no usable gateway model. Rejected: ${rejected.join(", ")}. Update LOVABLE_MODELS in src/lib/ai.server.ts.`,
+  );
 }
 
 async function callAnthropic(req: AiRequest): Promise<AiResult> {
