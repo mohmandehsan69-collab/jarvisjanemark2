@@ -46,11 +46,11 @@ function buildStrands(count: number): Strand[] {
       tilt: Math.acos(1 - (2 * (i + 0.5)) / count),
       yaw: g,
       start: (g * 1.7) % (Math.PI * 2),
-      span: 1.1 + ((i * 37) % 100) / 100 * 2.4,
-      shell: 0.78 + ((i * 53) % 100) / 100 * 0.22,
-      phase: ((i * 71) % 100) / 100 * Math.PI * 2,
-      speed: 0.6 + ((i * 29) % 100) / 100 * 1.1,
-      wobble: 0.012 + ((i * 17) % 100) / 100 * 0.05,
+      span: 1.1 + (((i * 37) % 100) / 100) * 2.4,
+      shell: 0.78 + (((i * 53) % 100) / 100) * 0.22,
+      phase: (((i * 71) % 100) / 100) * Math.PI * 2,
+      speed: 0.6 + (((i * 29) % 100) / 100) * 1.1,
+      wobble: 0.012 + (((i * 17) % 100) / 100) * 0.05,
     });
   }
   return out;

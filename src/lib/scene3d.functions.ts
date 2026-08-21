@@ -14,11 +14,4 @@ export const buildScene = createServerFn({ method: "POST" })
       })
       .parse(d),
   )
-  .handler(async ({ data, context }) =>
-    generateScene(
-      context.supabase as any,
-      context.userId,
-      data.prompt,
-      (data.previous as any) ?? null,
-    ),
-  );
+  .handler(async ({ data }) => generateScene(data.prompt, (data.previous as any) ?? null));

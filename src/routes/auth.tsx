@@ -8,7 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
 const title = "Sign in to Jarvis";
-const description = "Sign in or create an account so Jarvis can remember your facts, habits, research and workouts across sessions.";
+const description =
+  "Sign in or create an account so Jarvis can remember your facts, habits, research and 3D models across sessions.";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({

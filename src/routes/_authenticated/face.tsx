@@ -1,13 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
-import { useQueryClient } from "@tanstack/react-query";
 import { Mic, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Page } from "@/components/app/Page";
 import { AmbientFace } from "@/components/AmbientFace";
 import { useState } from "react";
 import { useVoiceMode, VOICE_LANGS, type VoiceLangKey } from "@/hooks/useVoiceMode";
-import { jarvisChat } from "@/lib/jarvis.functions";
+import { useVoiceRouter } from "@/lib/voice-router";
 
 const title = "Ambient face mode — hands-free Jarvis";
 const description =
@@ -35,27 +33,9 @@ const phaseCopy = {
 } as const;
 
 function FacePage() {
-  const chat = useServerFn(jarvisChat);
-  const qc = useQueryClient();
   const [lang, setLang] = useState<VoiceLangKey>("en");
-  const voice = useVoiceMode({
-    lang,
-    onUtterance: async (text) => {
-      const result = await chat({
-        data: {
-          message: text,
-          voice: true,
-          // Dari/Farsi replies must come back in Persian script to be spoken.
-          ...(lang === "fa"
-            ? { language: "Dari (Afghan Farsi). Reply only in Persian script." }
-            : {}),
-        },
-      });
-      void qc.invalidateQueries({ queryKey: ["chat_messages"] });
-      void qc.invalidateQueries({ queryKey: ["memory_notes"] });
-      return result.reply;
-    },
-  });
+  const onRoute = useVoiceRouter();
+  const voice = useVoiceMode({ lang, onRoute });
 
   // ACTIVE: break out of the sidebar layout entirely — true fullscreen hologram.
   if (voice.active) {
@@ -67,7 +47,11 @@ function FacePage() {
           aria-label="Interrupt"
           className="absolute inset-0 size-full cursor-default"
         >
-          <AmbientFace phase={voice.phase} active={voice.active} className="absolute inset-0 size-full" />
+          <AmbientFace
+            phase={voice.phase}
+            active={voice.active}
+            className="absolute inset-0 size-full"
+          />
         </button>
 
         <button
@@ -86,7 +70,9 @@ function FacePage() {
               type="button"
               onClick={() => setLang(key)}
               className={`rounded-full px-3 py-1 text-xs transition ${
-                lang === key ? "bg-[#ff6b1a]/30 text-[#ffc766]" : "text-white/50 hover:text-white/80"
+                lang === key
+                  ? "bg-[#ff6b1a]/30 text-[#ffc766]"
+                  : "text-white/50 hover:text-white/80"
               }`}
             >
               {VOICE_LANGS[key].label}
@@ -159,7 +145,9 @@ function FacePage() {
 
         <p className="max-w-xl text-center text-xs leading-relaxed text-muted-foreground">
           Speech is sent after a short pause rather than waiting for the browser to finalise the
-          transcript, because some browsers never do and silently drop input.
+          transcript, because some browsers never do and silently drop input. Say what you want and
+          Jarvis will jump to the right tab and run it — "make a 3D model of a 12 storey building",
+          "prepare this on the engineering tab", or just talk.
         </p>
       </div>
     </Page>

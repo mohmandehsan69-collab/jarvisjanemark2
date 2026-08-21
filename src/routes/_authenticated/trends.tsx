@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, Minus, Radar } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Page, Empty, errorText } from "@/components/app/Page";
 import { supabase } from "@/integrations/supabase/client";
 import { scanTrends } from "@/lib/jarvis.functions";
+import { consumePendingInstruction } from "@/lib/voice-router";
 
 const title = "Trend scanner";
 const description =
@@ -36,6 +37,7 @@ function TrendsPage() {
   const [keyword, setKeyword] = useState("");
   const qc = useQueryClient();
   const run = useServerFn(scanTrends);
+  const ranPending = useRef(false);
 
   const scans = useQuery({
     queryKey: ["trend_queries"],
@@ -59,6 +61,14 @@ function TrendsPage() {
     },
     onError: (error) => toast.error(errorText(error)),
   });
+
+  useEffect(() => {
+    if (ranPending.current) return;
+    ranPending.current = true;
+    const pending = consumePendingInstruction();
+    if (pending) scan.mutate(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <Page eyebrow="Research" title="Trends" intro={description} wide>
