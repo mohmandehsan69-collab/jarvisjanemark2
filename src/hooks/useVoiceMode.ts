@@ -35,6 +35,11 @@ function getRecognition(): any | null {
 const BARGE_IN_MIN_CHARS = 6;
 /** Spec §5.1: sustained speech required before a barge-in is accepted. */
 const BARGE_IN_SUSTAIN_MS = 700;
+/** A pause longer than this between recognition results means the previous
+ *  sound stopped, so the sustained-speech window restarts. Without this, two
+ *  isolated blips seconds apart would satisfy BARGE_IN_SUSTAIN_MS between them
+ *  and cut Jarvis off — exactly what the sustain requirement exists to prevent. */
+const BARGE_IN_GAP_MS = 400;
 /** Spec §5.1: cooldown after Jarvis stops speaking before the mic is trusted. */
 const POST_SPEECH_COOLDOWN_MS = 400;
 /** Spec §5.1: window after speech ends where transcripts are still checked
@@ -90,6 +95,7 @@ export function useVoiceMode({ onRoute, silenceMs = 650, lang = "en" }: Options)
   // Echo/interruption bookkeeping (spec §5.1).
   const recentUtterancesRef = useRef<{ text: string; at: number }[]>([]);
   const bargeCandidateSinceRef = useRef<number | null>(null);
+  const lastResultAtRef = useRef(0);
   const speechEndedAtRef = useRef(0);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const hasLocalVoiceRef = useRef<Record<VoiceLangKey, boolean>>({ en: true, fa: false });
@@ -98,6 +104,29 @@ export function useVoiceMode({ onRoute, silenceMs = 650, lang = "en" }: Options)
     setSupported(
       Boolean(getRecognition()) && typeof window !== "undefined" && "speechSynthesis" in window,
     );
+  }, []);
+
+  /** Chrome and Edge populate the voice list asynchronously: getVoices()
+   *  returns [] until `voiceschanged` fires. Reading it once would leave the
+   *  Persian check permanently false and force every Farsi/Dari turn through
+   *  server TTS even when a local voice is installed (spec §5.2), so the list
+   *  is re-read whenever the browser updates it. */
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const refresh = () => {
+      try {
+        const voices = window.speechSynthesis.getVoices();
+        if (!voices.length) return;
+        hasLocalVoiceRef.current.fa = voices.some(
+          (v) => VOICE_LANGS.fa.match.test(v.lang) || VOICE_LANGS.fa.match.test(v.name),
+        );
+      } catch {
+        /* speechSynthesis can throw in locked-down contexts; keep the default. */
+      }
+    };
+    refresh();
+    window.speechSynthesis.addEventListener?.("voiceschanged", refresh);
+    return () => window.speechSynthesis.removeEventListener?.("voiceschanged", refresh);
   }, []);
 
   const clearTimer = () => {
@@ -122,10 +151,8 @@ export function useVoiceMode({ onRoute, silenceMs = 650, lang = "en" }: Options)
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     warmedRef.current = true;
     try {
-      const voices = window.speechSynthesis.getVoices();
-      hasLocalVoiceRef.current.fa = voices.some(
-        (v) => VOICE_LANGS.fa.match.test(v.lang) || VOICE_LANGS.fa.match.test(v.name),
-      );
+      // Voice availability is tracked by the `voiceschanged` effect above;
+      // this only pays the synthesis init cost up front.
       const warm = new SpeechSynthesisUtterance(" ");
       warm.volume = 0;
       window.speechSynthesis.speak(warm);
@@ -406,6 +433,10 @@ export function useVoiceMode({ onRoute, silenceMs = 650, lang = "en" }: Options)
       if (!text.trim()) return;
 
       const now = Date.now();
+      // Record arrival immediately so every return path below leaves an
+      // accurate "last heard sound" mark for the barge-in gap check.
+      const prevResultAt = lastResultAtRef.current;
+      lastResultAtRef.current = now;
 
       // Spec §5.1 layer 1: hard cooldown right after Jarvis stops speaking.
       if (
@@ -441,13 +472,12 @@ export function useVoiceMode({ onRoute, silenceMs = 650, lang = "en" }: Options)
         }
         // Spec §5.1 layer 3: require sustained speech before accepting the
         // interruption, so a brief echo blip that didn't fuzzy-match still
-        // can't cut Jarvis off.
-        if (bargeCandidateSinceRef.current === null) {
+        // can't cut Jarvis off. The window restarts after a gap, so "sustained"
+        // means continuous sound rather than two blips far apart.
+        if (bargeCandidateSinceRef.current === null || now - prevResultAt > BARGE_IN_GAP_MS) {
           bargeCandidateSinceRef.current = now;
         }
-        if (now - bargeCandidateSinceRef.current < BARGE_IN_SUSTAIN_MS) {
-          return;
-        }
+        if (now - bargeCandidateSinceRef.current < BARGE_IN_SUSTAIN_MS) return;
         interrupt();
         speakingRef.current = false;
         busyRef.current = false;

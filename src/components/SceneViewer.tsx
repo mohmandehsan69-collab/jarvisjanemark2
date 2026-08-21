@@ -92,7 +92,6 @@ export function SceneViewer({
   onReady,
 }: Props) {
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const overlayRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<any>(null);
   const threeRef = useRef<any>(null);
   const groupRef = useRef<any>(null);
@@ -224,7 +223,7 @@ export function SceneViewer({
         let pinchStartDist = 0;
         let pinchStartRadius = 0;
         let moveGroupKey: string | null = null;
-        let movePlane = new THREE.Plane();
+        const movePlane = new THREE.Plane();
         let moveStart = new THREE.Vector3();
         let moveBaseOffset: [number, number, number] = [0, 0, 0];
 
@@ -600,13 +599,10 @@ export function SceneViewer({
         volume: part.size[0] * part.size[1] * part.size[2] * visibleIndices.length,
       });
 
-      const wantsEdges = mode !== "hologram" || true;
-      if (
-        wantsEdges &&
-        visibleIndices.length <= 80 &&
-        part.type !== "sphere" &&
-        part.type !== "torus"
-      ) {
+      // Edges are drawn in every mode — they carry the hologram/blueprint look
+      // as much as the fill does. Skipped on curved primitives, where
+      // EdgesGeometry produces noise, and on very large instance counts.
+      if (visibleIndices.length <= 80 && part.type !== "sphere" && part.type !== "torus") {
         const edgeColor =
           mode === "hologram" ? 0xffc766 : mode === "blueprint" ? 0xffffff : 0x000000;
         const edgeOpacity = mode === "hologram" ? 0.9 : mode === "blueprint" ? 0.5 : 0.22;
@@ -670,8 +666,6 @@ export function SceneViewer({
       }
 
       // Floating text labels via small canvas sprites — no extra CDN import.
-      const overlay = overlayRef.current;
-      if (overlay) overlay.innerHTML = "";
       for (const { part } of top.slice(0, 5)) {
         const { dims } = dimsAndVolume(part);
         const label = `${part.name} · ${dims[0].toFixed(1)}×${dims[1].toFixed(1)}×${dims[2].toFixed(1)}m`;
@@ -735,7 +729,6 @@ export function SceneViewer({
   return (
     <div className={className ?? "relative size-full"}>
       <div ref={mountRef} className="size-full" />
-      <div ref={overlayRef} className="pointer-events-none absolute inset-0" />
       {mode === "hologram" ? (
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.06]"
