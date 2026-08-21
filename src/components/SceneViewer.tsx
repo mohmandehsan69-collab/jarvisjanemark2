@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { Scene3D, ScenePart } from "@/lib/scene3d.server";
 
 /** Three.js is pulled from a CDN at runtime so the project needs no extra
@@ -46,7 +46,10 @@ type Props = {
 
 const EXPLODE_SPACING = 2.2;
 
-function dimsAndVolume(part: ScenePart): {
+/** Real-world dimensions and volume/area for a primitive. Exported so the
+ *  outliner reports exactly what clicking the part in 3D reports — these must
+ *  never diverge, since the measurement panel is the feature. */
+export function dimsAndVolume(part: ScenePart): {
   dims: [number, number, number];
   volume: number | null;
   area: number | null;
@@ -120,6 +123,17 @@ export function SceneViewer({
   onSelectRef.current = onSelect;
   const onDragGroupRef = useRef(onDragGroup);
   onDragGroupRef.current = onDragGroup;
+
+  // Group order drives the explode offsets. Held in a ref as well as a memo
+  // because the pointer handlers live in the mount-once effect: reading `scene`
+  // directly there would capture the first render's value (null) forever, and
+  // silently report a negative explode offset in the measurement panel.
+  const groupOrder = useMemo(
+    () => [...new Set((scene?.parts ?? []).map((p) => p.group))].sort(),
+    [scene],
+  );
+  const groupOrderRef = useRef(groupOrder);
+  groupOrderRef.current = groupOrder;
 
   // One-time engine setup: renderer, camera, lights, ground, orbit controls.
   useEffect(() => {
@@ -435,6 +449,10 @@ export function SceneViewer({
           raf = requestAnimationFrame(tick);
         };
         raf = requestAnimationFrame(tick);
+        // Engine is live — clear the loading state. The CDN import above can
+        // take several seconds on a cold cache, which is exactly when the
+        // placeholder needs to be visible.
+        if (statusRef.current) statusRef.current.style.display = "none";
 
         onReady?.({
           exportGlb: async () => {
@@ -483,9 +501,9 @@ export function SceneViewer({
 
   function explodeOffsetFor(group: string, explodeAmount: number): number {
     if (!explodeAmount) return 0;
-    // Order groups by name so storeys separate in a stable, readable order.
-    const groups = [...new Set((scene?.parts ?? []).map((p) => p.group))].sort();
-    const idx = groups.indexOf(group);
+    // Groups are ordered by name so storeys separate in a stable, readable way.
+    const idx = groupOrderRef.current.indexOf(group);
+    if (idx < 0) return 0;
     return idx * EXPLODE_SPACING * explodeAmount;
   }
 
@@ -740,7 +758,7 @@ export function SceneViewer({
       ) : null}
       <div
         ref={statusRef}
-        style={{ display: "none" }}
+        style={{ display: "flex" }}
         className="absolute inset-0 items-center justify-center bg-[#07070a] text-sm text-white/60"
       >
         Loading 3D engine…

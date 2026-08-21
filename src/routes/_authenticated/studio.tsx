@@ -22,6 +22,7 @@ import { Slider } from "@/components/ui/slider";
 import { Page } from "@/components/app/Page";
 import {
   SceneViewer,
+  dimsAndVolume,
   type DisplayMode,
   type SelectionInfo,
   type ViewerApi,
@@ -448,7 +449,7 @@ function StudioPage() {
                                 <button
                                   className="min-w-0 flex-1 truncate text-left"
                                   onClick={() => {
-                                    const { dims, volume, area } = dimsFromViewer(part);
+                                    const { dims, volume, area } = dimsAndVolume(part);
                                     const offset = part.repeat?.offset ?? [0, 0, 0];
                                     const groupOffset = groupOffsets[part.group] ?? [0, 0, 0];
                                     setSelected({
@@ -516,17 +517,3 @@ function StudioPage() {
   );
 }
 
-function dimsFromViewer(part: Scene3D["parts"][number]) {
-  const [a, b, c] = part.size;
-  switch (part.type) {
-    case "cylinder":
-    case "cone":
-      return { dims: [a * 2, b, a * 2] as [number, number, number], volume: null, area: null };
-    case "sphere":
-      return { dims: [a * 2, a * 2, a * 2] as [number, number, number], volume: null, area: null };
-    case "plane":
-      return { dims: [a, 0, c] as [number, number, number], volume: null, area: a * c };
-    default:
-      return { dims: [a, b, c] as [number, number, number], volume: a * b * c, area: null };
-  }
-}
