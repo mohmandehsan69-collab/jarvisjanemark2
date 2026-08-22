@@ -2,14 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { Send, Trash2 } from "lucide-react";
+import { Monitor, MonitorOff, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Page, Empty, errorText } from "@/components/app/Page";
 import { supabase } from "@/integrations/supabase/client";
-import { jarvisChat } from "@/lib/jarvis.functions";
+import { jarvisChat, shareScreen } from "@/lib/jarvis.functions";
 
 const title = "Chat with Jarvis";
 const description =
@@ -34,6 +35,7 @@ function ChatPage() {
   const qc = useQueryClient();
   const send = useServerFn(jarvisChat);
   const bottom = useRef<HTMLDivElement>(null);
+  const screen = useScreenShare();
 
   const messages = useQuery({
     queryKey: ["chat_messages"],
@@ -110,9 +112,7 @@ function ChatPage() {
                 ) : null}
               </div>
             ))}
-            {ask.isPending ? (
-              <p className="label-mono animate-pulse">Jarvis is thinking…</p>
-            ) : null}
+            {ask.isPending ? <p className="label-mono animate-pulse">Jarvis is thinking…</p> : null}
             <div ref={bottom} />
           </div>
 
@@ -141,32 +141,149 @@ function ChatPage() {
           </form>
         </div>
 
-        <aside className="panel h-fit p-5">
-          <p className="label-mono">Long-term memory</p>
-          <ul className="mt-3 space-y-2">
-            {memories.data?.length === 0 ? (
-              <li className="text-sm text-muted-foreground">Nothing stored yet.</li>
-            ) : null}
-            {memories.data?.map((note) => (
-              <li key={note.id} className="rounded-md border border-border px-3 py-2">
-                <div className="flex items-start justify-between gap-2">
-                  <Badge variant="outline" className="font-mono text-[0.6rem]">
-                    {note.key}
-                  </Badge>
-                  <button
-                    onClick={() => forget(note.id)}
-                    aria-label={`Forget ${note.key}`}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
+        <aside className="space-y-6">
+          <div className="panel h-fit p-5">
+            <p className="label-mono">Long-term memory</p>
+            <ul className="mt-3 space-y-2">
+              {memories.data?.length === 0 ? (
+                <li className="text-sm text-muted-foreground">Nothing stored yet.</li>
+              ) : null}
+              {memories.data?.map((note) => (
+                <li key={note.id} className="rounded-md border border-border px-3 py-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <Badge variant="outline" className="font-mono text-[0.6rem]">
+                      {note.key}
+                    </Badge>
+                    <button
+                      onClick={() => forget(note.id)}
+                      aria-label={`Forget ${note.key}`}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                    {note.value}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="panel h-fit p-5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="label-mono">Screen share</p>
+              {screen.active ? (
+                <span className="flex items-center gap-1 text-[0.65rem] text-warn">
+                  <span className="size-1.5 animate-pulse rounded-full bg-warn" /> sharing
+                </span>
+              ) : null}
+            </div>
+            {screen.active ? (
+              <div className="mt-3 space-y-3">
+                <video
+                  ref={screen.videoRef}
+                  muted
+                  autoPlay
+                  playsInline
+                  className="w-full rounded-md border border-border"
+                />
+                <div className="flex gap-2">
+                  <Input
+                    value={screen.question}
+                    onChange={(e) => screen.setQuestion(e.target.value)}
+                    placeholder="Ask about what's on screen…"
+                    onKeyDown={(e) => e.key === "Enter" && screen.ask()}
+                  />
+                  <Button size="sm" onClick={() => screen.ask()} disabled={screen.busy}>
+                    Ask
+                  </Button>
                 </div>
-                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{note.value}</p>
-              </li>
-            ))}
-          </ul>
+                {screen.answer ? (
+                  <p className="rounded-md bg-surface-2 p-3 text-xs leading-relaxed">
+                    {screen.answer}
+                  </p>
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => screen.stop()}
+                >
+                  <MonitorOff className="size-3.5" /> Stop sharing
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-3 w-full gap-2"
+                onClick={() => screen.start()}
+              >
+                <Monitor className="size-3.5" /> Share screen
+              </Button>
+            )}
+          </div>
         </aside>
       </div>
     </Page>
   );
+}
+
+/** Spec §3.4: explicit, user-initiated screen share. One tab or window per
+ *  share (the browser picker enforces this), stops in one tap, never
+ *  background or persistent. */
+function useScreenShare() {
+  const analyze = useServerFn(shareScreen);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [active, setActive] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function start() {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      streamRef.current = stream;
+      stream.getVideoTracks()[0]?.addEventListener("ended", () => stop());
+      if (videoRef.current) videoRef.current.srcObject = stream;
+      setActive(true);
+      setAnswer("");
+    } catch (error) {
+      toast.error(errorText(error));
+    }
+  }
+
+  function stop() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setActive(false);
+    setAnswer("");
+  }
+
+  async function ask() {
+    const video = videoRef.current;
+    if (!video || !question.trim()) return;
+    setBusy(true);
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d")?.drawImage(video, 0, 0);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      const base64 = dataUrl.split(",")[1] ?? "";
+      const result = await analyze({ data: { base64, mimeType: "image/jpeg", question } });
+      setAnswer(result.answer);
+      setQuestion("");
+    } catch (error) {
+      toast.error(errorText(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => () => streamRef.current?.getTracks().forEach((t) => t.stop()), []);
+
+  return { active, videoRef, question, setQuestion, answer, busy, start, stop, ask };
 }

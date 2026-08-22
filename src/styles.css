@@ -68,7 +68,11 @@
   --color-ok: var(--ok);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-amber: var(--amber);
+  --color-amber-foreground: var(--amber-foreground);
   --shadow-glow: 0 0 0 1px var(--border), 0 18px 50px -20px oklch(0.72 0.15 195 / 0.35);
+  --shadow-amber-glow:
+    0 0 0 1px oklch(0.78 0.16 68 / 0.4), 0 18px 50px -20px oklch(0.78 0.16 68 / 0.45);
 }
 
 :root {
@@ -99,6 +103,8 @@
   --warn: oklch(0.82 0.15 78);
   --warn-foreground: oklch(0.18 0.02 250);
   --ok: oklch(0.78 0.16 155);
+  --amber: oklch(0.78 0.16 68);
+  --amber-foreground: oklch(0.16 0.02 70);
   --chart-1: oklch(0.74 0.16 250);
   --chart-2: oklch(0.82 0.15 78);
   --chart-3: oklch(0.78 0.16 155);

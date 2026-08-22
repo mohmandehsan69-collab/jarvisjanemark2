@@ -1,17 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Page, errorText } from "@/components/app/Page";
+import { CrossCheckView } from "@/components/app/CrossCheckView";
 import { askEngineering } from "@/lib/jarvis.functions";
+import { consumePendingInstruction } from "@/lib/voice-router";
 
 const title = "Engineering Q&A";
 const description =
-  "Step-by-step engineering answers with stated assumptions, worked calculations, units, sanity checks and the standard each clause came from.";
+  "Step-by-step engineering answers with stated assumptions, worked calculations, units and sanity checks — every question is cross-checked with a second independent pass before you see it.";
 
 export const Route = createFileRoute("/_authenticated/engineering")({
   head: () => ({
@@ -30,10 +32,22 @@ export const Route = createFileRoute("/_authenticated/engineering")({
 function EngineeringPage() {
   const [question, setQuestion] = useState("");
   const ask = useServerFn(askEngineering);
+  const ranPending = useRef(false);
   const run = useMutation({
-    mutationFn: () => ask({ data: { question: question.trim() } }),
+    mutationFn: (q: string) => ask({ data: { question: q.trim() } }),
     onError: (error) => toast.error(errorText(error)),
   });
+
+  useEffect(() => {
+    if (ranPending.current) return;
+    ranPending.current = true;
+    const pending = consumePendingInstruction();
+    if (pending) {
+      setQuestion(pending);
+      run.mutate(pending);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <Page eyebrow="Technical" title="Engineering" intro={description}>
@@ -41,7 +55,7 @@ function EngineeringPage() {
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault();
-          if (question.trim().length > 3) run.mutate();
+          if (question.trim().length > 3) run.mutate(question);
         }}
       >
         <Textarea
@@ -52,30 +66,16 @@ function EngineeringPage() {
         />
         <Button type="submit" disabled={run.isPending} className="gap-2">
           <Wrench className="size-4" />
-          {run.isPending ? "Working…" : "Ask"}
+          {run.isPending ? "Cross-checking…" : "Ask"}
         </Button>
       </form>
 
       {run.data ? (
         <article className="panel mt-8 p-5">
-          <p className="label-mono">Answer · via {run.data.provider}</p>
-          <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap">{run.data.answer}</p>
-          {run.data.sources.length ? (
-            <ul className="mt-4 space-y-1">
-              {run.data.sources.slice(0, 8).map((s) => (
-                <li key={s.url}>
-                  <a
-                    href={s.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-mono text-[0.7rem] text-primary underline-offset-4 hover:underline"
-                  >
-                    {s.title || s.url}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          ) : null}
+          <p className="label-mono">Answer · cross-checked</p>
+          <div className="mt-3">
+            <CrossCheckView result={run.data} />
+          </div>
           <p className="mt-4 text-xs text-warn">
             Safety-critical work must be checked and signed off by a licensed engineer.
           </p>

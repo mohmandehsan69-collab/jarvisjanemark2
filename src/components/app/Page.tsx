@@ -25,7 +25,9 @@ export function Page({
             <p className="label-mono">{eyebrow}</p>
             <h1 className="mt-1.5 text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
             {intro ? (
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">{intro}</p>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                {intro}
+              </p>
             ) : null}
           </div>
           {actions}

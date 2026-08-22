@@ -1,8 +1,21 @@
 import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { Activity, Compass, LogOut, MessageSquare, Mic, Radar, Sparkles, Wrench } from "lucide-react";
+import {
+  Activity,
+  Box,
+  Brain,
+  Compass,
+  Eye,
+  Image as ImageIcon,
+  LogOut,
+  MessageSquare,
+  Mic,
+  Radar,
+  Wrench,
+} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import { FloatingMic } from "@/components/FloatingMic";
 
 export const Route = createFileRoute("/_authenticated")({
   component: Shell,
@@ -11,11 +24,14 @@ export const Route = createFileRoute("/_authenticated")({
 const nav = [
   { to: "/chat", label: "Chat", icon: MessageSquare },
   { to: "/face", label: "Face", icon: Mic },
-  { to: "/briefing", label: "Briefing", icon: Sparkles },
-  { to: "/trends", label: "Trends", icon: Radar },
-  { to: "/research", label: "Research", icon: Compass },
+  { to: "/studio", label: "3D Studio", icon: Box },
   { to: "/engineering", label: "Engineering", icon: Wrench },
+  { to: "/research", label: "Research", icon: Compass },
   { to: "/habits", label: "Habits", icon: Activity },
+  { to: "/trends", label: "Trends", icon: Radar },
+  { to: "/deduction", label: "Deduction", icon: Eye },
+  { to: "/metacognition", label: "Metacognition", icon: Brain },
+  { to: "/images", label: "Images", icon: ImageIcon },
 ] as const;
 
 function Shell() {
@@ -83,6 +99,7 @@ function Shell() {
           ))}
         </nav>
       </div>
+      <FloatingMic />
     </div>
   );
 }

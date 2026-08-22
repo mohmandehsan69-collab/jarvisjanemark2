@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Compass, FolderPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Page, Empty, errorText } from "@/components/app/Page";
+import { CrossCheckView, type CrossCheck } from "@/components/app/CrossCheckView";
 import { supabase } from "@/integrations/supabase/client";
-import { researchTopic } from "@/lib/jarvis.functions";
+import { promoteReport, researchTopic } from "@/lib/jarvis.functions";
+import { consumePendingInstruction } from "@/lib/voice-router";
 
 const title = "Multi-source research";
 const description =
@@ -47,13 +49,15 @@ function ResearchPage() {
   const [outputType, setOutputType] = useState<(typeof types)[number]["value"]>("summary");
   const qc = useQueryClient();
   const run = useServerFn(researchTopic);
+  const promote = useServerFn(promoteReport);
+  const ranPending = useRef(false);
 
   const reports = useQuery({
     queryKey: ["research_reports"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("research_reports")
-        .select("id,topic,output_type,body,sources,created_at")
+        .select("id,topic,output_type,body,sources,cross_check,created_at")
         .order("created_at", { ascending: false })
         .limit(20);
       if (error) throw new Error(error.message);
@@ -62,7 +66,7 @@ function ResearchPage() {
   });
 
   const research = useMutation({
-    mutationFn: () => run({ data: { topic: topic.trim(), outputType } }),
+    mutationFn: (t: string) => run({ data: { topic: t.trim(), outputType } }),
     onSuccess: () => {
       setTopic("");
       toast.success("Report ready.");
@@ -71,16 +75,19 @@ function ResearchPage() {
     onError: (error) => toast.error(errorText(error)),
   });
 
-  const promote = useMutation({
-    mutationFn: async (report: { id: string; topic: string; body: string }) => {
-      const { error } = await supabase.from("projects").insert({
-        user_id: (await supabase.auth.getUser()).data.user!.id,
-        title: report.topic,
-        summary: report.body.slice(0, 600),
-        source_report_id: report.id,
-      });
-      if (error) throw new Error(error.message);
-    },
+  useEffect(() => {
+    if (ranPending.current) return;
+    ranPending.current = true;
+    const pending = consumePendingInstruction();
+    if (pending) {
+      setTopic(pending);
+      research.mutate(pending);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const promoteMutation = useMutation({
+    mutationFn: (reportId: string) => promote({ data: { reportId } }),
     onSuccess: () => {
       toast.success("Added to Projects.");
       void qc.invalidateQueries({ queryKey: ["projects"] });
@@ -94,7 +101,7 @@ function ResearchPage() {
         className="flex flex-wrap gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          if (topic.trim().length > 2) research.mutate();
+          if (topic.trim().length > 2) research.mutate(topic);
         }}
       >
         <Input
@@ -135,31 +142,21 @@ function ResearchPage() {
                 variant="outline"
                 size="sm"
                 className="gap-2"
-                disabled={promote.isPending}
-                onClick={() => promote.mutate({ id: r.id, topic: r.topic, body: r.body })}
+                disabled={promoteMutation.isPending}
+                onClick={() => promoteMutation.mutate(r.id)}
               >
                 <FolderPlus className="size-3.5" /> Turn into project
               </Button>
             </div>
-            <p className="mt-4 text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
-              {r.body}
-            </p>
-            {Array.isArray(r.sources) && r.sources.length ? (
-              <ul className="mt-4 space-y-1">
-                {(r.sources as unknown as { title: string; url: string }[]).slice(0, 8).map((s) => (
-                  <li key={s.url}>
-                    <a
-                      href={s.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-mono text-[0.7rem] text-primary underline-offset-4 hover:underline"
-                    >
-                      {s.title || s.url}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+            <div className="mt-4">
+              {r.cross_check ? (
+                <CrossCheckView result={r.cross_check as unknown as CrossCheck} />
+              ) : (
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+                  {r.body}
+                </p>
+              )}
+            </div>
           </article>
         ))}
       </div>
